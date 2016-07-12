@@ -17,7 +17,9 @@ Route::get('/', function () {
 });
 
 Route::get('/welcome', ['middleware' => ['older:100,100'], function () {
+
    return view('welcome');
+   
 }]);
 
 Route::get('/tasks', function () {
