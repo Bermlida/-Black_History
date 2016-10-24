@@ -2,9 +2,11 @@
 
 namespace Vista\TinyRouter;
 
-use RuntimeException;
 use ReflectionMethod;
 use ReflectionFunction;
+use RuntimeException;
+use Psr\Http\Message\ServerRequestInterface;
+use Vista\TinyRouter\RouteModelInterface;
 
 class Router
 {
@@ -12,23 +14,25 @@ class Router
     protected $rules = [];
     protected $callbacks = [];
 
-    public function setRoot(string $namespace)
+    public function setNamespace(string $namespace)
     {
-        $this->root = $namespace;
+        $this->root = trim($namespace, '\\');
     }
 
-    public function dispatch()
+    public function dispatch(ServerRequestInterface $request)
     {
-        $uri = parse_url($_SERVER['REQUEST_URI']);
+        $request_uri = $request->getServerParams()['REQUEST_URI'];
+        $uri_path = trim(parse_url($request_uri)['path'], '/');
 
-        $path = trim($uri['path'], '/');
-        if (($index = $this->compareUri($path)) < 0) {
-            $processor = $this->resolveUri($path);
+        if (($index = $this->compareUri($uri_path)) < 0) {
+            $processor = $this->resolveUri($uri_path);
             $reflector = $this->reflectMethod($processor->class, $processor->method);
-            $params = $_SERVER['REQUEST_METHOD'] == 'POST' ? $_POST : $_GET;
+
+            // if ()
+            // $params = $_SERVER['REQUEST_METHOD'] == 'POST' ? $_POST : $_GET;
         } else {
             $reflector = $this->reflectCallback($index);
-            $params = $this->getParamsByUri($index, $path);
+            $params = $this->getParamsByUri($index, $uri_path);
         }
 
         $arguments = $this->bindArguments($reflector, $params);
@@ -38,8 +42,8 @@ class Router
     protected function compareUri(string $uri)
     {
         foreach ($this->rules as $key => $rule) {
-            $pattern = str_replace('/', '\/', $rule);
-            $pattern = '/' + preg_replace('/\{\w+\}/', '\w+', $rule) + '/';
+            $rule_regex = preg_replace('/\{\w+\}/', '(\w+)', $rule);
+            $pattern = '/' + str_replace('/', '\/', $rule_regex) + '/';
 
             if (preg_match($pattern, $uri) === 1) {
                 return $key;
@@ -64,7 +68,7 @@ class Router
             }
             $segments[$key] = $segment;
         }
-        $class = $this->root . '/' . implode('/', $segments);
+        $class = $this->root . '\\' . implode('\\', $segments);
 
         return (object)(['class' => $class, 'method' => $method]);
     }
@@ -77,17 +81,16 @@ class Router
         return new ReflectionFunction($closure);
     }
 
-    protected function reflectCallback(int $index)
+    protected function reflectCallback(int $index, ServerRequestInterface $request)
     {
-        $request_method = $_SERVER['REQUEST_METHOD'];
-        $callbacks = array_change_key_case($this->callbacks[$index], CASE_UPPER);
+        $request_method = $request->getServerParams()['REQUEST_METHOD'];
+        $request_method = strtolower($request_method);
         $callback = $callbacks[$request_method];
 
         if (is_callable($callback)) {
             return new ReflectionFunction($callback);
-        } elseif (is_string($callback) && !(strpos($callback, '::') === false)) {
-            $segments = explode('::', $callback);
-            return $this->reflectMethod($segments[0], $segments[1]);
+        } elseif (is_array($callback) && is_string($callback[0]) && is_string($callback[1])) {
+            return $this->reflectMethod($callback[0], $callback[1]);
         }
         return null;
     }
@@ -112,16 +115,26 @@ class Router
     {
         $parameters = $reflector->getParameters();
         
-        if (count($parameters) > 0) {
+        if (!empty($parameters)) {
             $reflector = $parameters[0]->getClass();
-            $interface_constraint = '';
             
-            if (!is_null($reflector) && $reflector->implementsInterface($interface_constraint)) {
-                $object = new $reflector->getName();
-                foreach ($params as $key => $value) {
-                    $object->$key = $value;
+            if (count($parameter) == 1 && !is_null($reflector)) {
+                if ($reflector->implementsInterface(RouteModelInterface::class)) {
+                    $constructor = $reflector->getConstructor();                
+                    if (!is_null($constructor)) {
+                        foreach ($constructor->getParameters() as $key => $parameter) {
+                            if (isset($params[$parameter->name])) {
+                                $value = $params[$parameter->name];
+                                $arguments[$key] = $value;
+                            }
+                        }
+                        $arguments = [$reflector->newInstanceArgs(($arguments ?? []))];
+                    }
+                } else {
+                    if (isset($params[$parameters[0]->name])) {
+                        $arguments[] = $params[$parameters[0]->name];
+                    }
                 }
-                $arguments[] = $object;
             } else {
                 foreach ($parameters as $key => $parameter) {
                     if (isset($params[$parameter->name])) {
