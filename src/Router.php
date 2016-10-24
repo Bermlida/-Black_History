@@ -6,7 +6,6 @@ use ReflectionMethod;
 use ReflectionFunction;
 use RuntimeException;
 use Psr\Http\Message\ServerRequestInterface;
-use Vista\TinyRouter\RouteModelInterface;
 
 class Router
 {
@@ -31,7 +30,7 @@ class Router
             // if ()
             // $params = $_SERVER['REQUEST_METHOD'] == 'POST' ? $_POST : $_GET;
         } else {
-            $reflector = $this->reflectCallback($index);
+            $reflector = $this->reflectCallback($index, $request);
             $params = $this->getParamsByUri($index, $uri_path);
         }
 
@@ -43,7 +42,7 @@ class Router
     {
         foreach ($this->rules as $key => $rule) {
             $rule_regex = preg_replace('/\{\w+\}/', '(\w+)', $rule);
-            $pattern = '/' + str_replace('/', '\/', $rule_regex) + '/';
+            $pattern = '/' . str_replace('/', '\/', $rule_regex) . '/';
 
             if (preg_match($pattern, $uri) === 1) {
                 return $key;
@@ -73,9 +72,9 @@ class Router
         return (object)(['class' => $class, 'method' => $method]);
     }
 
-    protected function reflectMethod(string $class, string $method)
+    protected function reflectMethod($class, string $method)
     {
-        $object = new $class;
+        $object = is_string($class) ? new $class : $class;
         $reflector_method = new ReflectionMethod($object, $method);
         $closure = $reflector_method->getClosure($object);
         return new ReflectionFunction($closure);
@@ -85,12 +84,14 @@ class Router
     {
         $request_method = $request->getServerParams()['REQUEST_METHOD'];
         $request_method = strtolower($request_method);
-        $callback = $callbacks[$request_method];
+        $callback = $this->callbacks[$index][$request_method];
 
-        if (is_callable($callback)) {
+        if (is_array($callback)) {
+            if ((is_string($callback[0]) || is_object($callback[0])) && is_string($callback[1])) {
+                return $this->reflectMethod($callback[0], $callback[1]);
+            }
+        } elseif (is_callable($callback)) {
             return new ReflectionFunction($callback);
-        } elseif (is_array($callback) && is_string($callback[0]) && is_string($callback[1])) {
-            return $this->reflectMethod($callback[0], $callback[1]);
         }
         return null;
     }
@@ -118,7 +119,7 @@ class Router
         if (!empty($parameters)) {
             $reflector = $parameters[0]->getClass();
             
-            if (count($parameter) == 1 && !is_null($reflector)) {
+            if (count($parameters) == 1 && !is_null($reflector)) {
                 if ($reflector->implementsInterface(RouteModelInterface::class)) {
                     $constructor = $reflector->getConstructor();                
                     if (!is_null($constructor)) {
@@ -150,22 +151,23 @@ class Router
 
     public function __call($method, $arguments)
     {
-        $valid_verb = ["post", "get", "put", "delete", "header", "patch", "options"];
+        // $valid_verb = ["post", "get", "put", "delete", "header", "patch", "options"];
         
-        if (in_array($method, $valid_verb)) {
-            $method = strtoupper($method);
-            $keys = array_keys($this->rules, $arguments[0]);
+        // if (in_array($method, $valid_verb)) {
+        $method = strtolower($method);
+        $rule = trim($arguments[0], '/');
+        $keys = array_keys($this->rules, $rule);
 
-            if (count($keys) > 0) {
-                $key = current($keys);
-                $this->callbacks[$key][$method] = $arguments[1];
-            } else {
-                $callbacks[$method] = $arguments[1];
-                $this->rules[] = $arguments[0];
-                $this->callbacks[] = $callbacks;
-            }
+        if (count($keys) > 0) {
+            $key = current($keys);
+            $this->callbacks[$key][$method] = $arguments[1];
         } else {
-            throw new RuntimeException('');
+            $callbacks[$method] = $arguments[1];
+            $this->rules[] = $rule;
+            $this->callbacks[] = $callbacks;
         }
+        // } else {
+            // throw new RuntimeException('');
+        // }
     }
 }
