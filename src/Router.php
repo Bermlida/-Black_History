@@ -26,16 +26,14 @@ class Router
         if (($index = $this->compareUri($uri_path)) < 0) {
             $processor = $this->resolveUri($uri_path);
             $reflector = $this->reflectMethod($processor->class, $processor->method);
-
-            // if ()
-            // $params = $_SERVER['REQUEST_METHOD'] == 'POST' ? $_POST : $_GET;
+            $params = [];
         } else {
             $reflector = $this->reflectCallback($index, $request);
             $params = $this->getParamsByUri($index, $uri_path);
         }
 
         $arguments = $this->bindArguments($reflector, $params);
-        $reflector->invokeArgs($arguments);
+        return $reflector->invokeArgs($arguments);
     }
 
     protected function compareUri(string $uri)
@@ -151,9 +149,6 @@ class Router
 
     public function __call($method, $arguments)
     {
-        // $valid_verb = ["post", "get", "put", "delete", "header", "patch", "options"];
-        
-        // if (in_array($method, $valid_verb)) {
         $method = strtolower($method);
         $rule = trim($arguments[0], '/');
         $keys = array_keys($this->rules, $rule);
@@ -166,8 +161,5 @@ class Router
             $this->rules[] = $rule;
             $this->callbacks[] = $callbacks;
         }
-        // } else {
-            // throw new RuntimeException('');
-        // }
     }
 }

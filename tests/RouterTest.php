@@ -17,25 +17,19 @@ class RouterTest extends PHPUnit_Framework_TestCase
         return array_map([$this, 'getRequest'], [
             [
                 'uri' => '/test_handler/process',
-                'method' => 'put',
-                'parsed_body' => ['profile_item' => 'brief', 'profile_value' => 'content']
+                'method' => 'put'
             ],
             [
-                'uri' => '/user/account/settings',
-                'method' => 'post',
-                'parsed_body' => ['setting_item' => 'subscription', 'setting_value' => true]
+                'uri' => '/user/account/settings/subscription/true',
+                'method' => 'post'
             ],
             [
-                'uri' => '/user/profiles/picture',
-                'method' => 'get',
-                'query' => ['sort' => 111],
-                'parsed_body' => ['top' => 222]
+                'uri' => '/user/profiles/picture/111/222',
+                'method' => 'get'
             ],
             [
-                'uri' => '/user/profiles/brief',
-                'method' => 'header',
-                'query' => ['paragraph' => 3],
-                'parsed_body' => ['default' => 'this is brief sample']
+                'uri' => '/user/profiles/brief/3/this is brief sample',
+                'method' => 'header'
             ]
         ]);
     }
@@ -61,9 +55,9 @@ class RouterTest extends PHPUnit_Framework_TestCase
     public function testSetRule(Router $router)
     {
         $router->post(
-            'user/account/settings',
+            'user/account/settings/{setting_item}/{setting_value}',
             function ($setting_item, $setting_value) {
-                if ($setting_item == 'subscription' && $setting_value) {
+                if ($setting_item == 'subscription' && $setting_value == 'true') {
                     return 'correct';
                 } else {
                     return 'error in Closure';
@@ -71,9 +65,9 @@ class RouterTest extends PHPUnit_Framework_TestCase
             }
         );
 
-        $router->get('/user/profiles/picture', [TestHandler::class, 'processWithParams']);
+        $router->get('/user/profiles/picture/{sort}/{top}', [TestHandler::class, 'processWithParams']);
 
-        $router->header('/user/profiles/brief', [new TestHandler(), 'processWithModel']);
+        $router->header('/user/profiles/brief/{paragraph}/{default}', [new TestHandler(), 'processWithModel']);
     }
 
     /**
@@ -82,7 +76,7 @@ class RouterTest extends PHPUnit_Framework_TestCase
      */
     public function testDispatch($request, Router $router)
     {
-        $this->assertEquals($router->dispatch($request), 'correct value');
+        $this->assertEquals($router->dispatch($request), 'correct');
     }
 
     /**

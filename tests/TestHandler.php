@@ -4,13 +4,9 @@ namespace Vista\TinyRouter\Tests;
 
 class TestHandler
 {
-    public function process($profile_item, $profile_value)
+    public function process()
     {
-        if ($profile_item == 'brief' && $profile_value == 'content') {
-            return 'correct';
-        } else {
-            return 'error in TestHandler::process';
-        }
+        return 'correct';
     }
 
     public function processWithParams($sort, $top)
@@ -22,7 +18,7 @@ class TestHandler
         }
     }
     
-    public function processWithModel($model)
+    public function processWithModel(TestRouteModel $model)
     {
         if ($model->paragraph == 3 && $model->default == 'this is brief sample') {
             return 'correct';
