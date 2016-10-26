@@ -13,11 +13,13 @@
         "phly/http": "^0.14.1"
     },
     "autoload": {
-        "Vista\\": "src/"
+        "psr-4": {
+            "Vista\\TinyRouter\\": "src/"
+        }
     },
     "autoload-dev": {
-        "classmap": [
-            "tests/"
-        ]
+        "psr-4": {
+            "Vista\\TinyRouter\\Tests\\": "tests/"
+        }
     }
 }
