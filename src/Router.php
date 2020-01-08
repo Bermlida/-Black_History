@@ -9,15 +9,44 @@ use Psr\Http\Message\ServerRequestInterface;
 
 class Router
 {
+    /**
+     * The namespace for classes.
+     *
+     * @var string
+     */
     protected $root = '';
+
+    /**
+     * The route rules.
+     *
+     * @var array
+     */
     protected $rules = [];
+
+    /**
+     * The callbacks for the route rules.
+     *
+     * @var array
+     */
     protected $callbacks = [];
 
+    /**
+     * Set the namespace for classes.
+     *
+     * @param string $namespace
+     * @return void
+     */
     public function setNamespace(string $namespace)
     {
         $this->root = trim($namespace, '\\');
     }
 
+    /**
+     * Dispatch the request to the processor and get the result.
+     *
+     * @param \Psr\Http\Message\ServerRequestInterface $request
+     * @return mixed
+     */
     public function dispatch(ServerRequestInterface $request)
     {
         $request_uri = $request->getServerParams()['REQUEST_URI'];
@@ -33,9 +62,16 @@ class Router
         }
 
         $arguments = $this->bindArguments($reflector, $params);
+
         return $reflector->invokeArgs($arguments);
     }
 
+    /**
+     * Match the uri to find the matching route rule.
+     *
+     * @param string $uri
+     * @return int
+     */
     protected function compareUri(string $uri)
     {
         foreach ($this->rules as $key => $rule) {
@@ -46,9 +82,16 @@ class Router
                 return $key;
             }
         }
+
         return -1;
     }
 
+    /**
+     * Get class and method by parsing uri.
+     *
+     * @param string $uri
+     * @return object
+     */
     protected function resolveUri(string $uri)
     {
         $segments = explode('/', $uri);
@@ -58,30 +101,51 @@ class Router
             if (!(strpos($segment, '_') === false)) {
                 $segment = implode(array_map(function ($segment) {
                     $segment = ucfirst(strtolower($segment));
+
                     return $segment;
                 }, explode('_', $segment)));
             } else {
                 $segment = ucfirst($segment);
             }
+
             $segments[$key] = $segment;
         }
+
         $class = $this->root . '\\' . implode('\\', $segments);
 
         return (object)(['class' => $class, 'method' => $method]);
     }
 
+    /**
+     * Get class's method and convert it to a reflection class.
+     *
+     * @param mixed $class
+     * @param string $method
+     * @return \ReflectionFunction
+     */
     protected function reflectMethod($class, string $method)
     {
         $object = is_string($class) ? new $class : $class;
+
         $reflector_method = new ReflectionMethod($object, $method);
+
         $closure = $reflector_method->getClosure($object);
+
         return new ReflectionFunction($closure);
     }
 
+    /**
+     * Get the corresponding callback and convert it to a reflection class.
+     *
+     * @param int $index
+     * @param Psr\Http\Message\ServerRequestInterface $request
+     * @return \ReflectionFunction|null
+     */
     protected function reflectCallback(int $index, ServerRequestInterface $request)
     {
         $request_method = $request->getServerParams()['REQUEST_METHOD'];
         $request_method = strtolower($request_method);
+
         $callback = $this->callbacks[$index][$request_method];
 
         if (is_array($callback)) {
@@ -91,9 +155,17 @@ class Router
         } elseif (is_callable($callback)) {
             return new ReflectionFunction($callback);
         }
+
         return null;
     }
 
+    /**
+     * Get parameters by the path placeholder match uri.
+     *
+     * @param string $index
+     * @param string $uri
+     * @return array
+     */
     protected function getParamsByUri(string $index, string $uri)
     {
         $rule_segments = explode('/', $this->rules[$index]);
@@ -110,6 +182,13 @@ class Router
         return $params ?? [];
     }
 
+    /**
+     * Bind parameters to an anonymous function or object method.
+     *
+     * @param \ReflectionFunction $reflector
+     * @param array $params
+     * @return array
+     */
     protected function bindArguments(ReflectionFunction $reflector, array $params)
     {
         $parameters = $reflector->getParameters();
@@ -119,7 +198,8 @@ class Router
             
             if (count($parameters) == 1 && !is_null($reflector)) {
                 if ($reflector->implementsInterface(RouteModelInterface::class)) {
-                    $constructor = $reflector->getConstructor();                
+                    $constructor = $reflector->getConstructor();
+
                     if (!is_null($constructor)) {
                         foreach ($constructor->getParameters() as $key => $parameter) {
                             if (isset($params[$parameter->name])) {
@@ -127,6 +207,7 @@ class Router
                                 $arguments[$key] = $value;
                             }
                         }
+
                         $arguments = [$reflector->newInstanceArgs(($arguments ?? []))];
                     }
                 } else {
@@ -147,6 +228,14 @@ class Router
         return $arguments ?? [];
     }
 
+    /**
+     * Handle dynamic method calls in the router.
+     *
+     * @param string $method
+     * @param array $arguments
+     * @return void
+     * @throws \RuntimeException
+     */
     public function __call($method, $arguments)
     {
         $method = strtolower($method);
@@ -155,9 +244,11 @@ class Router
 
         if (count($keys) > 0) {
             $key = current($keys);
+
             $this->callbacks[$key][$method] = $arguments[1];
         } else {
             $callbacks[$method] = $arguments[1];
+            
             $this->rules[] = $rule;
             $this->callbacks[] = $callbacks;
         }

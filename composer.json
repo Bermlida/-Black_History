@@ -1,9 +1,13 @@
 {   
-    "name": "Vista/TinyRouter",
-    "description": "",
-    "keywords": ["", ""],
+    "name": "bermlida/TinyRouter",
+    "description": "none",
     "license": "MIT",
-    "type": "",
+    "authors": [
+        {
+            "name": "Bermlida",
+            "email": "fir4268@gmail.com"
+        }
+    ],
     "require": {
         "psr/http-message": "^1.0"
     },
